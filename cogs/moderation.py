@@ -5,29 +5,54 @@ import datetime
 class Moderation(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        # Global server-wide counters and storage:
+        # self.warning_counters[guild_id] = int (tracks the latest warning number)
+        # self.warnings[guild_id] = { warn_id: { "user_id": int, "reason": str, "moderator": str } }
+        self.warning_counters = {}
+        self.warnings = {}
 
-    # 1. WARN & REMOVE
-    @commands.group(invoke_without_command=True)
-    @commands.has_permissions(manage_messages=True)
-    async def warn(self, ctx, user: discord.Member, *, reason: str = "No reason provided"):
-        warn_id = abs(hash(f"{user.id}-{datetime.datetime.now()}")) % 10000
-        
-        # Send a direct message to the user who got warned
+    # Helper function to send DMs safely
+    async def notify_user(self, member: discord.abc.User, title: str, description: str, color: discord.Color):
         try:
-            dm_embed = discord.Embed(
-                title=f"⚠️ You have been warned in **{ctx.guild.name}**",
-                color=discord.Color.orange()
-            )
-            dm_embed.add_field(name="Reason", value=reason, inline=False)
-            dm_embed.add_field(name="Warning ID", value=f"`#{warn_id}`", inline=True)
-            dm_embed.timestamp = datetime.datetime.now()
-            await user.send(embed=dm_embed)
+            embed = discord.Embed(title=title, description=description, color=color)
+            embed.timestamp = datetime.datetime.now()
+            await member.send(embed=embed)
         except discord.Forbidden:
             pass # Fails safely if user has DMs closed
 
-        embed = discord.Embed(title="⚠️ 𝐀𝐜𝐭𝐢𝐨𝐧: 𝐔𝐬𝐞𝐫 𝐖𝐚𝐫𝐧𝐞𝐝", color=discord.Color.orange())
-        embed.add_field(name="Target User", value=user.mention, inline=True)
-        embed.add_field(name="Warning ID", value=f"`#{warn_id}`", inline=True)
+    # 1. WARN SYSTEM (Global Sequential IDs)
+    @commands.group(invoke_without_command=True)
+    @commands.has_permissions(manage_messages=True)
+    async def warn(self, ctx, member: discord.Member, *, reason: str = "No reason provided"):
+        guild_id = ctx.guild.id
+
+        if guild_id not in self.warning_counters:
+            self.warning_counters[guild_id] = 0
+        if guild_id not in self.warnings:
+            self.warnings[guild_id] = {}
+
+        # Increment global counter
+        self.warning_counters[guild_id] += 1
+        warn_id = self.warning_counters[guild_id]
+
+        # Store warning data globally for the guild
+        self.warnings[guild_id][warn_id] = {
+            "user_id": member.id,
+            "reason": reason,
+            "moderator": str(ctx.author)
+        }
+
+        # Notify User in DMs
+        await self.notify_user(
+            member,
+            title=f"⚠️ Warning Received in {ctx.guild.name}",
+            description=f"**Reason:** {reason}\n**Warning ID:** #{warn_id}\n**Moderator:** {ctx.author}",
+            color=discord.Color.orange()
+        )
+
+        embed = discord.Embed(title="Action: User Warned", color=discord.Color.orange())
+        embed.add_field(name="User", value=member.mention, inline=True)
+        embed.add_field(name="Warning ID", value=f"#{warn_id}", inline=True)
         embed.add_field(name="Moderator", value=ctx.author.mention, inline=True)
         embed.add_field(name="Reason", value=reason, inline=False)
         embed.timestamp = datetime.datetime.now()
@@ -36,19 +61,35 @@ class Moderation(commands.Cog):
 
     @warn.command(name="remove")
     @commands.has_permissions(manage_messages=True)
-    async def warn_remove(self, ctx, user: discord.Member, warn_id: int):
-        embed = discord.Embed(title="✅ 𝐀𝐜𝐭𝐢𝐨𝐧: 𝐖𝐚𝐫𝐧𝐢𝐧𝐠 𝐑𝐞𝐦𝐨𝐯𝐞𝐝", color=discord.Color.green())
-        embed.description = f"Successfully processed warning removal for ID **#{warn_id}** on {user.mention}."
-        embed.timestamp = datetime.datetime.now()
-        await ctx.send(embed=embed)
+    async def warn_remove(self, ctx, warn_id: int):
+        guild_id = ctx.guild.id
+
+        if guild_id in self.warnings and warn_id in self.warnings[guild_id]:
+            removed_warn = self.warnings[guild_id].pop(warn_id)
+            target_user = ctx.guild.get_member(removed_warn["user_id"])
+            user_text = target_user.mention if target_user else f"User ID `{removed_warn['user_id']}`"
+
+            embed = discord.Embed(title="Action: Warning Removed", color=discord.Color.green())
+            embed.description = f"Successfully removed warning ID **#{warn_id}** belonging to {user_text}."
+            embed.timestamp = datetime.datetime.now()
+            await ctx.send(embed=embed)
+        else:
+            await ctx.send(f"❌ Warning ID `#{warn_id}` does not exist in this server.")
 
     # 2. BAN
     @commands.command()
     @commands.has_permissions(ban_members=True)
-    async def ban(self, ctx, user: discord.User, *, reason: str = "No reason provided"):
-        await ctx.guild.ban(user, reason=reason)
-        embed = discord.Embed(title="🔨 𝐀𝐜𝐭𝐢𝐨𝐧: 𝐔𝐬𝐞𝐫 𝐁𝐚𝐧𝐧𝐞𝐝", color=discord.Color.red())
-        embed.add_field(name="User", value=str(user), inline=True)
+    async def ban(self, ctx, member: discord.Member, *, reason: str = "No reason provided"):
+        await self.notify_user(
+            member,
+            title=f"🔨 Banned from {ctx.guild.name}",
+            description=f"**Reason:** {reason}\n**Moderator:** {ctx.author}",
+            color=discord.Color.red()
+        )
+        
+        await ctx.guild.ban(member, reason=reason)
+        embed = discord.Embed(title="Action: User Banned", color=discord.Color.red())
+        embed.add_field(name="User", value=str(member), inline=True)
         embed.add_field(name="Moderator", value=ctx.author.mention, inline=True)
         embed.add_field(name="Reason", value=reason, inline=False)
         embed.timestamp = datetime.datetime.now()
@@ -68,8 +109,8 @@ class Moderation(commands.Cog):
                 
         if target_user:
             await ctx.guild.unban(target_user)
-            embed = discord.Embed(title="🔓 𝐀𝐜𝐭𝐢𝐨𝐧: 𝐔𝐬𝐞𝐫 𝐔𝐧𝐛𝐚𝐧𝐧𝐞𝐝", color=discord.Color.blue())
-            embed.description = f"Successfully pardoned and unbanned **{target_user}**."
+            embed = discord.Embed(title="Action: User Unbanned", color=discord.Color.blue())
+            embed.description = f"Successfully unbanned **{target_user}**."
             await ctx.send(embed=embed)
         else:
             await ctx.send(f"❌ Could not find a banned user matching `{user_name_or_id}`.")
@@ -77,12 +118,21 @@ class Moderation(commands.Cog):
     # 4. TIMEOUT
     @commands.command()
     @commands.has_permissions(moderate_members=True)
-    async def timeout(self, ctx, member: discord.Member, *, reason: str = "No reason provided"):
-        duration = datetime.timedelta(minutes=10)
+    async def timeout(self, ctx, member: discord.Member, minutes: int = 10, *, reason: str = "No reason provided"):
+        duration = datetime.timedelta(minutes=minutes)
+        
+        await self.notify_user(
+            member,
+            title=f"⏳ Timed Out in {ctx.guild.name}",
+            description=f"**Duration:** {minutes} Minutes\n**Reason:** {reason}\n**Moderator:** {ctx.author}",
+            color=discord.Color.gold()
+        )
+
         await member.timeout(duration, reason=reason)
-        embed = discord.Embed(title="⏳ 𝐀𝐜𝐭𝐢𝐨𝐧: 𝐔𝐬𝐞𝐫 𝐓𝐢𝐦𝐞𝐝 𝐎𝐮𝐭", color=discord.Color.gold())
+        embed = discord.Embed(title="Action: User Timed Out", color=discord.Color.gold())
         embed.add_field(name="Member", value=member.mention, inline=True)
-        embed.add_field(name="Duration", value="10 Minutes", inline=True)
+        embed.add_field(name="Duration", value=f"{minutes} Minutes", inline=True)
+        embed.add_field(name="Moderator", value=ctx.author.mention, inline=True)
         embed.add_field(name="Reason", value=reason, inline=False)
         embed.timestamp = datetime.datetime.now()
         await ctx.send(embed=embed)
@@ -92,7 +142,7 @@ class Moderation(commands.Cog):
     @commands.has_permissions(moderate_members=True)
     async def untimeout(self, ctx, member: discord.Member):
         await member.timeout(None)
-        embed = discord.Embed(title="🔊 𝐀𝐜𝐭𝐢𝐨𝐧: 𝐓𝐢𝐦𝐞𝐨𝐮𝐭 𝐑𝐞𝐦𝐨𝐯𝐞𝐝", color=discord.Color.green())
+        embed = discord.Embed(title="Action: Timeout Removed", color=discord.Color.green())
         embed.description = f"Restored communication privileges for {member.mention}."
         await ctx.send(embed=embed)
 
@@ -100,10 +150,54 @@ class Moderation(commands.Cog):
     @commands.command()
     @commands.has_permissions(kick_members=True)
     async def kick(self, ctx, member: discord.Member, *, reason: str = "No reason provided"):
+        await self.notify_user(
+            member,
+            title=f"👢 Kicked from {ctx.guild.name}",
+            description=f"**Reason:** {reason}\n**Moderator:** {ctx.author}",
+            color=discord.Color.dark_red()
+        )
+
         await member.kick(reason=reason)
-        embed = discord.Embed(title="👢 𝐀𝐜𝐭𝐢𝐨𝐧: 𝐔𝐬𝐞𝐫 𝐊𝐢𝐜𝐤𝐞𝐝", color=discord.Color.dark_red())
+        embed = discord.Embed(title="Action: User Kicked", color=discord.Color.dark_red())
         embed.add_field(name="Member", value=str(member), inline=True)
-        embed.add_field(name="Reason", value=reason, inline=True)
+        embed.add_field(name="Moderator", value=ctx.author.mention, inline=True)
+        embed.add_field(name="Reason", value=reason, inline=False)
+        embed.timestamp = datetime.datetime.now()
+        await ctx.send(embed=embed)
+
+    # 7. CLEAN HELP COMMAND
+    @commands.command(name="help")
+    async def help_command(self, ctx):
+        embed = discord.Embed(
+            title="NexterMC Command Center",
+            description="Welcome to your professional server control panel. Use prefix `,` for all commands.",
+            color=discord.Color.blurple()
+        )
+        
+        embed.add_field(
+            name="🛡️ Moderation Commands",
+            value=(
+                "`warn <user> [reason]` - Warns a user and logs a global ID.\n"
+                "`warn remove <id>` - Clears an active warning ID.\n"
+                "`ban <user> [reason]` - Permanently bans a disruptive user.\n"
+                "`unban <user_id>` - Pardons a banned user ID/name.\n"
+                "`timeout <user> [minutes] [reason]` - Mutes a user for specified minutes.\n"
+                "`untimeout <user>` - Restores user's speaking privileges.\n"
+                "`kick <user> [reason]` - Kicks a user from the server."
+            ),
+            inline=False
+        )
+
+        embed.add_field(
+            name="✨ Utility & Fun",
+            value=(
+                "`ping` - Verifies bot response latency.\n"
+                "`say <message>` - Broadcasts an announcement."
+            ),
+            inline=False
+        )
+
+        embed.set_footer(text="NexterMC • Protected Securely", icon_url=ctx.bot.user.avatar.url if ctx.bot.user.avatar else None)
         embed.timestamp = datetime.datetime.now()
         await ctx.send(embed=embed)
 
