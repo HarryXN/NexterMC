@@ -6,8 +6,6 @@ class Moderation(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         # Global server-wide counters and storage:
-        # self.warning_counters[guild_id] = int (tracks the latest warning number)
-        # self.warnings[guild_id] = { warn_id: { "user_id": int, "reason": str, "moderator": str } }
         self.warning_counters = {}
         self.warnings = {}
 
@@ -51,7 +49,7 @@ class Moderation(commands.Cog):
         )
 
         embed = discord.Embed(title="Action: User Warned", color=discord.Color.orange())
-        embed.add_field(name="User", value=member.mention, inline=True)
+        embed.add_field(name="User", value=f"{member} (`{member.id}`)", inline=False)
         embed.add_field(name="Warning ID", value=f"#{warn_id}", inline=True)
         embed.add_field(name="Moderator", value=ctx.author.mention, inline=True)
         embed.add_field(name="Reason", value=reason, inline=False)
@@ -66,8 +64,9 @@ class Moderation(commands.Cog):
 
         if guild_id in self.warnings and warn_id in self.warnings[guild_id]:
             removed_warn = self.warnings[guild_id].pop(warn_id)
-            target_user = ctx.guild.get_member(removed_warn["user_id"])
-            user_text = target_user.mention if target_user else f"User ID `{removed_warn['user_id']}`"
+            target_user_id = removed_warn["user_id"]
+            target_user = ctx.guild.get_member(target_user_id)
+            user_text = f"{target_user} (`{target_user_id}`)" if target_user else f"User ID `{target_user_id}`"
 
             embed = discord.Embed(title="Action: Warning Removed", color=discord.Color.green())
             embed.description = f"Successfully removed warning ID **#{warn_id}** belonging to {user_text}."
@@ -80,6 +79,10 @@ class Moderation(commands.Cog):
     @commands.command()
     @commands.has_permissions(ban_members=True)
     async def ban(self, ctx, member: discord.Member, *, reason: str = "No reason provided"):
+        if member == ctx.guild.owner or member == ctx.author:
+            await ctx.send("❌ You cannot ban this user.")
+            return
+
         await self.notify_user(
             member,
             title=f"🔨 Banned from {ctx.guild.name}",
@@ -89,7 +92,7 @@ class Moderation(commands.Cog):
         
         await ctx.guild.ban(member, reason=reason)
         embed = discord.Embed(title="Action: User Banned", color=discord.Color.red())
-        embed.add_field(name="User", value=str(member), inline=True)
+        embed.add_field(name="User", value=f"{member} (`{member.id}`)", inline=False)
         embed.add_field(name="Moderator", value=ctx.author.mention, inline=True)
         embed.add_field(name="Reason", value=reason, inline=False)
         embed.timestamp = datetime.datetime.now()
@@ -110,7 +113,7 @@ class Moderation(commands.Cog):
         if target_user:
             await ctx.guild.unban(target_user)
             embed = discord.Embed(title="Action: User Unbanned", color=discord.Color.blue())
-            embed.description = f"Successfully unbanned **{target_user}**."
+            embed.description = f"Successfully unbanned **{target_user}** (`{target_user.id}`)."
             await ctx.send(embed=embed)
         else:
             await ctx.send(f"❌ Could not find a banned user matching `{user_name_or_id}`.")
@@ -119,6 +122,10 @@ class Moderation(commands.Cog):
     @commands.command()
     @commands.has_permissions(moderate_members=True)
     async def timeout(self, ctx, member: discord.Member, minutes: int = 10, *, reason: str = "No reason provided"):
+        if member == ctx.guild.owner or member == ctx.author:
+            await ctx.send("❌ You cannot timeout this user.")
+            return
+
         duration = datetime.timedelta(minutes=minutes)
         
         await self.notify_user(
@@ -128,14 +135,17 @@ class Moderation(commands.Cog):
             color=discord.Color.gold()
         )
 
-        await member.timeout(duration, reason=reason)
-        embed = discord.Embed(title="Action: User Timed Out", color=discord.Color.gold())
-        embed.add_field(name="Member", value=member.mention, inline=True)
-        embed.add_field(name="Duration", value=f"{minutes} Minutes", inline=True)
-        embed.add_field(name="Moderator", value=ctx.author.mention, inline=True)
-        embed.add_field(name="Reason", value=reason, inline=False)
-        embed.timestamp = datetime.datetime.now()
-        await ctx.send(embed=embed)
+        try:
+            await member.timeout(duration, reason=reason)
+            embed = discord.Embed(title="Action: User Timed Out", color=discord.Color.gold())
+            embed.add_field(name="Member", value=f"{member} (`{member.id}`)", inline=False)
+            embed.add_field(name="Duration", value=f"{minutes} Minutes", inline=True)
+            embed.add_field(name="Moderator", value=ctx.author.mention, inline=True)
+            embed.add_field(name="Reason", value=reason, inline=False)
+            embed.timestamp = datetime.datetime.now()
+            await ctx.send(embed=embed)
+        except Exception:
+            await ctx.send(f"❌ Failed to timeout user. Make sure my role is higher than theirs!")
 
     # 5. UNTIMEOUT
     @commands.command()
@@ -143,13 +153,17 @@ class Moderation(commands.Cog):
     async def untimeout(self, ctx, member: discord.Member):
         await member.timeout(None)
         embed = discord.Embed(title="Action: Timeout Removed", color=discord.Color.green())
-        embed.description = f"Restored communication privileges for {member.mention}."
+        embed.description = f"Restored communication privileges for {member} (`{member.id}`)."
         await ctx.send(embed=embed)
 
     # 6. KICK
     @commands.command()
     @commands.has_permissions(kick_members=True)
     async def kick(self, ctx, member: discord.Member, *, reason: str = "No reason provided"):
+        if member == ctx.guild.owner or member == ctx.author:
+            await ctx.send("❌ You cannot kick this user.")
+            return
+
         await self.notify_user(
             member,
             title=f"👢 Kicked from {ctx.guild.name}",
@@ -159,7 +173,7 @@ class Moderation(commands.Cog):
 
         await member.kick(reason=reason)
         embed = discord.Embed(title="Action: User Kicked", color=discord.Color.dark_red())
-        embed.add_field(name="Member", value=str(member), inline=True)
+        embed.add_field(name="Member", value=f"{member} (`{member.id}`)", inline=False)
         embed.add_field(name="Moderator", value=ctx.author.mention, inline=True)
         embed.add_field(name="Reason", value=reason, inline=False)
         embed.timestamp = datetime.datetime.now()
@@ -175,7 +189,7 @@ class Moderation(commands.Cog):
         )
         
         embed.add_field(
-            name="🛡️ Moderation Commands",
+            name="🛡️ Moderation Suite",
             value=(
                 "`warn <user> [reason]` - Warns a user and logs a global ID.\n"
                 "`warn remove <id>` - Clears an active warning ID.\n"
@@ -189,7 +203,7 @@ class Moderation(commands.Cog):
         )
 
         embed.add_field(
-            name="✨ Utility & Fun",
+            name="✨ Utility",
             value=(
                 "`ping` - Verifies bot response latency.\n"
                 "`say <message>` - Broadcasts an announcement."
