@@ -138,4 +138,5 @@ async def kick(ctx, member: discord.Member, *, reason: str = "None"):
     embed.add_field(name="Reason", value=reason, inline=True)
     await ctx.send(embed=embed)
 
-bot.run("YOUR_DISCORD_TOKEN")
+import os
+bot.run(os.getenv("DISCORD_TOKEN"))
