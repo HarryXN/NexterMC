@@ -3,3 +3,4 @@ python-dotenv
 mcstatus
 aiohttp
 psutil
+google-genai
