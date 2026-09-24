@@ -16,6 +16,10 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 
 async def load_cogs():
     cog_folder = "./cogs"
+    if not os.path.exists(cog_folder):
+        print(f"Directory {cog_folder} not found!")
+        return
+        
     for filename in os.listdir(cog_folder):
         if filename.endswith(".py"):
             module_path = f"cogs.{filename[:-3]}"
@@ -40,4 +44,7 @@ async def setup_hook():
     await load_cogs()
 
 if __name__ == "__main__":
-    bot.run(TOKEN)
+    if not TOKEN:
+        print("ERROR: DISCORD_TOKEN environment variable is missing!")
+    else:
+        bot.run(TOKEN)
