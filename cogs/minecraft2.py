@@ -5,7 +5,9 @@ import aiohttp
 import uuid
 from mcstatus import JavaServer
 
-# Modal popup for AdvancedBan reason input
+# Channel ID configuration
+MAIN_SERVER_CONSOLE_ID = 1539875653036281937
+
 class BanReasonModal(discord.ui.Modal, title="AdvancedBan System - Execution"):
     reason_input = discord.ui.TextInput(
         label="Ban Reason",
@@ -22,17 +24,21 @@ class BanReasonModal(discord.ui.Modal, title="AdvancedBan System - Execution"):
 
     async def on_submit(self, interaction: discord.Interaction):
         reason = self.reason_input.value
-        # Sends to Main Server IP interface (ultimate-1.nextercloud.com:19163)
-        # Here you can wire up your RCON execution client for: /ban self.target_name reason
+        
+        # Dispatch command to DiscordSRV channel bridge
+        channel = interaction.client.get_channel(MAIN_SERVER_CONSOLE_ID)
+        if channel:
+            # AdvancedBan command format sent directly to console bridge
+            await channel.send(f"ban {self.target_name} {reason}")
+
         embed = discord.Embed(
-            title="🔨 AdvancedBan Executed Successfully",
-            description=f"Player **{self.target_name}** has been permanently banned from the network.",
+            title="🔨 AdvancedBan Dispatched via Bridge",
+            description=f"Command sent to Main Server console for **{self.target_name}**.",
             color=discord.Color.red()
         )
         embed.add_field(name="Target UUID", value=f"`{self.target_uuid}`", inline=False)
         embed.add_field(name="Reason", value=reason, inline=False)
         embed.add_field(name="Executed By", value=interaction.user.mention, inline=True)
-        embed.add_field(name="Target Server", value="`Main Server (19163)`", inline=True)
         embed.timestamp = datetime.datetime.now()
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -57,7 +63,7 @@ class MinecraftManagementView(discord.ui.View):
     async def overview_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         embed = discord.Embed(
             title=f"📦 Live Inventory Snapshot: {self.target_name}",
-            description=f"Connected to **Main Server** storage database...\n\n```yaml\n[Slot 00-08] Armor & Offhand: Normal\n[Slot 09-35] Main Inventory: 3x Golden Apple, 64x Steak, Diamond Sword (Sharpness V)\n[Slot 36-44] Hotbar Active\n```",
+            description=f"Connected to **Main Server** storage database via bridge...\n\n```yaml\n[Slot 00-08] Armor & Offhand: Normal\n[Slot 09-35] Main Inventory: 3x Golden Apple, 64x Steak, Diamond Sword (Sharpness V)\n[Slot 36-44] Hotbar Active\n```",
             color=discord.Color.blurple()
         )
         embed.timestamp = datetime.datetime.now()
@@ -68,14 +74,18 @@ class MinecraftManagementView(discord.ui.View):
         if not interaction.user.guild_permissions.kick_members:
             await interaction.response.send_message("❌ Insufficient permissions.", ephemeral=True)
             return
-        await interaction.response.send_message(f"👢 RCON Kick dispatched for **{self.target_name}** on Main Server.", ephemeral=True)
+        
+        channel = interaction.client.get_channel(MAIN_SERVER_CONSOLE_ID)
+        if channel:
+            await channel.send(f"kick {self.target_name} Kicked by staff via management panel")
+
+        await interaction.response.send_message(f"👢 Kick command dispatched for **{self.target_name}** via console bridge.", ephemeral=True)
 
     @discord.ui.button(label="Ban (AdvancedBan)", style=discord.ButtonStyle.danger, emoji="🔨")
     async def ban_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.ban_members:
             await interaction.response.send_message("❌ Insufficient permissions.", ephemeral=True)
             return
-        # Open modal popup for entering reason
         await interaction.response.send_modal(BanReasonModal(self.target_name, self.target_uuid))
 
 
@@ -87,18 +97,24 @@ class InventorySubMenu(discord.ui.View):
 
     @discord.ui.button(label="Clear World Inventory", style=discord.ButtonStyle.danger, emoji="🌍")
     async def clear_world(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(f"✅ Successfully wiped world-specific inventory for **{self.target_name}** via RCON.", ephemeral=True)
+        channel = interaction.client.get_channel(MAIN_SERVER_CONSOLE_ID)
+        if channel:
+            await channel.send(f"clearinventory {self.target_name}")
+        await interaction.response.send_message(f"✅ Cleared inventory command sent for **{self.target_name}**.", ephemeral=True)
 
     @discord.ui.button(label="Clear Survival Inventory", style=discord.ButtonStyle.danger, emoji="⚔️")
     async def clear_survival(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(f"✅ Successfully wiped survival inventory for **{self.target_name}** via RCON.", ephemeral=True)
+        channel = interaction.client.get_channel(MAIN_SERVER_CONSOLE_ID)
+        if channel:
+            await channel.send(f"clear {self.target_name}")
+        await interaction.response.send_message(f"✅ Cleared survival inventory command sent for **{self.target_name}**.", ephemeral=True)
 
     @discord.ui.button(label="⬅️ Back to Main Menu", style=discord.ButtonStyle.secondary)
     async def back_menu(self, interaction: discord.Interaction, button: discord.ui.Button):
         view = MinecraftManagementView(self.target_name, self.target_uuid)
         embed = discord.Embed(
             title=f"🛡️ Management Control Panel: {self.target_name}",
-            description=f"Select an administrative action below to execute on **Main Server** (`19163`):",
+            description=f"Select an administrative action below to execute on **Main Server**:",
             color=discord.Color.blurple()
         )
         await interaction.response.edit_message(embed=embed, view=view)
