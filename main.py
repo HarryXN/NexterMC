@@ -9,7 +9,7 @@ load_dotenv()
 # Initialize Gemini Client
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 ai_client = genai.Client(api_key=GEMINI_API_KEY)
-MODEL_ID = "gemini-2.5-flash"
+MODEL_ID = "gemini-3.6-flash"
 
 intents = discord.Intents.default()
 intents.message_content = True
