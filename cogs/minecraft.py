@@ -17,7 +17,7 @@ class Minecraft(commands.Cog):
     async def status(self, ctx):
         embed = discord.Embed(
             title="NexterMC Network Status",
-            description="Real-time health check for NexterCloud infrastructure.",
+            description="Real-time health check for NexterMC Network hosted by NexterCloud",
             color=discord.Color.blurple()
         )
         embed.timestamp = datetime.datetime.now()
@@ -52,8 +52,8 @@ class Minecraft(commands.Cog):
             description="Join our Minecraft network using the details below!",
             color=discord.Color.green()
         )
-        embed.add_field(name="Java Edition IP", value="`ultimate-1.nextercloud.com:25565`", inline=False)
-        embed.add_field(name="Bedrock Port", value="`25565` (via Geyser)", inline=False)
+        embed.add_field(name="Server IP Java/Bedrock", value="`play.nextermc.net`", inline=False)
+        embed.add_field(name="Bedrock Port", value="`19132` (via Geyser)", inline=False)
         embed.timestamp = datetime.datetime.now()
         await ctx.send(embed=embed)
 
