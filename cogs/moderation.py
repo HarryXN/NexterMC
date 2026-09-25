@@ -1,3 +1,4 @@
+# cogs/moderation.py
 import discord
 from discord.ext import commands
 import datetime
@@ -176,51 +177,6 @@ class Moderation(commands.Cog):
         embed.add_field(name="Member", value=f"{member} (`{member.id}`)", inline=False)
         embed.add_field(name="Moderator", value=ctx.author.mention, inline=True)
         embed.add_field(name="Reason", value=reason, inline=False)
-        embed.timestamp = datetime.datetime.now()
-        await ctx.send(embed=embed)
-
-    # 7. ENHANCED HELP COMMAND
-    @commands.command(name="help")
-    async def help_command(self, ctx):
-        embed = discord.Embed(
-            title="🌟 NexterMC Control Panel & Command Center",
-            description="Welcome to the administrative dashboard. Use prefix `,` for all commands.",
-            color=discord.Color.blurple()
-        )
-        
-        embed.add_field(
-            name="🛡️ Moderation Suite",
-            value=(
-                "`warn <user> [reason]` - Issues a tracked warning with a global ID.\n"
-                "`warn remove <id>` - Clears an active warning ID.\n"
-                "`ban <user> [reason]` - Permanently bans a disruptive user.\n"
-                "`unban <user_id>` - Pardons a banned user ID/name.\n"
-                "`timeout <user> [mins] [reason]` - Mutes a user temporarily.\n"
-                "`untimeout <user>` - Restores user speaking privileges.\n"
-                "`kick <user> [reason]` - Kicks a user from the server."
-            ),
-            inline=False
-        )
-
-        embed.add_field(
-            name="🔍 System Diagnostics & Administration",
-            value=(
-                "`check` - Runs a deep system scan for syntax errors, RAM/CPU load, and Minecraft node health.\n"
-                "`pyfiles` - Displays active repository directory structure."
-            ),
-            inline=False
-        )
-
-        embed.add_field(
-            name="✨ Utility & Tools",
-            value=(
-                "`ping` - Checks bot websocket response latency.\n"
-                "`say <message>` - Broadcasts an administrative announcement."
-            ),
-            inline=False
-        )
-
-        embed.set_footer(text="NexterMC • Protected Securely", icon_url=ctx.bot.user.avatar.url if ctx.bot.user.avatar else None)
         embed.timestamp = datetime.datetime.now()
         await ctx.send(embed=embed)
 
