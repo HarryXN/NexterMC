@@ -15,16 +15,23 @@ class InvSummaryCog(commands.Cog):
 
     @commands.command(
         name="invsummary",
-        help="Audits invite claims against official event rules and calculates final qualified invites.",
+        help="Audits invite claims, bot logs, and event rules to calculate final net invite counts.",
     )
     async def invsummary(self, ctx):
-        loading_msg = await ctx.reply("⏳ Fetching event rules and auditing invite requirements...", mention_author=False)
+        loading_msg = await ctx.reply("⏳ Fetching event rules and parsing invite logs & bot outputs...", mention_author=False)
 
         try:
             messages_history = []
             async for message in ctx.channel.history(limit=100, oldest_first=True):
-                if not message.author.bot:
+                if not message.author.bot or message.author.id == self.bot.user.id:
+                    # Keep user messages and bot logs (like Falcon or ticketing bots)
                     messages_history.append(f"{message.author.name}: {message.content}")
+                    # Also include embed descriptions if bots use embeds for invite logs
+                    for embed in message.embeds:
+                        if embed.description:
+                            messages_history.append(f"[{message.author.name} Embed]: {embed.description}")
+                        for field in embed.fields:
+                            messages_history.append(f"[{message.author.name} Field]: {field.name} - {field.value}")
 
             if not messages_history:
                 await loading_msg.edit(content="❌ No messages found to audit.")
@@ -39,23 +46,26 @@ class InvSummaryCog(commands.Cog):
                 try:
                     rules_messages = []
                     async for r_msg in rules_channel.history(limit=50, oldest_first=True):
-                        rules_messages.append(r_msg.content)
+                        rules_messages.append(r_msg.s if hasattr(r_msg, 'content') else r_msg.content)
                     if rules_messages:
                         rules_transcript = "\n".join(rules_messages)
                 except Exception as e:
                     rules_transcript = f"⚠️ Could not load rules: {e}"
 
             prompt = (
-                "You are an elite reward auditor. Review the official Event Rules and the Ticket Transcript. "
-                "Provide a rigorous, clear invite & reward audit using Markdown bullet points. No tables, no HTML.\n\n"
+                "You are an elite, highly rigorous reward and invite auditor. "
+                "Analyze the official Event Rules and the entire Ticket Transcript (including bot logs from bots like Falcon showing Joins, Left, Fakes, etc.). "
+                "Perform a precise arithmetic and rule-compliance audit. If rules or deductions (leaves, fakes, penalties) drop the count below zero, calculate the actual negative number.\n\n"
+                "Provide the response using clean Markdown bullet points. No tables, no HTML.\n\n"
                 "Use this exact structure:\n"
-                "• **Claimed Invites:** [Number claimed by user]\n"
-                "• **Valid Verified Invites:** [Final calculated count after rules]\n"
-                "• **Deductions & Violations:** [Missing bio/pfp, fake invites, or rule breaches with reasons]\n"
-                "• **Reward Eligibility:** [Met / Not Met, and what proof/requirements are missing]\n"
-                "• **Final Staff Verdict:** [1 sentence conclusion and exact next action for staff]\n\n"
+                "• **Claimed Invites:** [Number claimed by the user]\n"
+                "• **Bot Log Data Found:** [Summary of Joins, Left, Fakes, or net stats reported by invite bots in the transcript]\n"
+                "• **Deductions & Rule Violations:** [Explicit breakdown of penalties, leaves, fakes, or missing criteria]\n"
+                "• **FINAL INVITES COUNT:** [The exact calculated final count after all rules and deductions—can be negative if penalties exceed valid joins]\n"
+                "• **Reward Eligibility:** [Met / Not Met, along with remaining requirements]\n"
+                "• **Final Staff Verdict:** [1 sentence conclusion telling staff exact next action]\n\n"
                 f"--- OFFICIAL EVENT RULES ---\n{rules_transcript}\n\n"
-                f"--- TICKET TRANSCRIPT ---\n{chat_transcript}"
+                f"--- TICKET TRANSCRIPT & BOT LOGS ---\n{chat_transcript}"
             )
 
             chat_completion = self.groq_client.chat.completions.create(
@@ -68,7 +78,7 @@ class InvSummaryCog(commands.Cog):
             summary_text = chat_completion.choices[0].message.content
 
             embed = discord.Embed(
-                title="🎁 Invite & Reward Audit",
+                title="🎁 Advanced Invite & Reward Audit",
                 description=summary_text,
                 color=discord.Color.green(),
             )
@@ -82,4 +92,4 @@ class InvSummaryCog(commands.Cog):
             await loading_msg.edit(content=error_msg)
 
 async def setup(bot):
-    await bot.add_cog(InvSummaryCog(bot))
+    await bot.add_cog(SummaryCog(bot) if 'SummaryCog' in globals() else InvSummaryCog(bot))
