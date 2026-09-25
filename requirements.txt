@@ -4,3 +4,4 @@ mcstatus
 aiohttp
 psutil
 google-genai
+groq
