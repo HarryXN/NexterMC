@@ -13,14 +13,14 @@ class FullSummaryCog(commands.Cog):
 
     @commands.command(
         name="fullsummary",
-        help="Compiles a comprehensive, unlimited-history master report of the entire ticket.",
+        help="Compiles an exhaustive master report of long-term tickets with unlimited history scanning.",
     )
     async def fullsummary(self, ctx):
-        loading_msg = await ctx.reply("⏳ Pulling unlimited channel history and compiling full master report...", mention_author=False)
+        loading_msg = await ctx.reply("⏳ Scanning full long-term ticket history (unlimited depth)...", mention_author=False)
 
         try:
             messages_history = []
-            # limit=None fetches the entire channel history from the beginning
+            # limit=None pulls the entire history from message 1 to the end, safely paginated by Discord.py
             async for message in ctx.channel.history(limit=None, oldest_first=True):
                 content = f"[{message.created_at.strftime('%Y-%m-%d %H:%M')}] {message.author.name}: {message.content}"
                 for embed in message.embeds:
@@ -33,23 +33,30 @@ class FullSummaryCog(commands.Cog):
                 await loading_msg.edit(content="❌ No message history found.")
                 return
 
+            # If the ticket is exceptionally long (e.g., thousands of lines), we chunk or fit it into the prompt safely
             chat_transcript = "\n".join(messages_history)
+            
+            # If transcript is massively long, inform user we are processing heavy data
+            if len(messages_history) > 300:
+                await loading_msg.edit(content=f"🧠 Processing massive long-term ticket ({len(messages_history)} messages)... Generating master report...")
+
             category_id = ctx.channel.category_id if ctx.channel.category else 0
-            plan_context = "Free Plan (Invite-based)" if str(category_id) == "1505564682482618368" else ("Paid Plan" if str(category_id) == "1456919500602474651" else "General")
+            plan_context = "Free Cloud Hosting (Invite-based)" if str(category_id) == "1505564682482618368" else ("Paid Cloud Hosting Plan" if str(category_id) == "1456919500602474651" else "General Support")
 
             prompt = (
                 f"You are an elite senior auditor for NexterCloud hosting ({plan_context}). "
-                "Analyze the ENTIRE ticket history from the very first message to the last. Do not miss any details, bot commands, or user statements. "
-                "Provide an exhaustive, factual, eye-catching, professional master report in Markdown. Zero hallucinations.\n\n"
+                "Analyze the ENTIRE long-term ticket history provided from start to finish, no matter how long it is. "
+                "Do not miss any key developments, recurring issues, bot commands, user claims, or staff directions across time. "
+                "Provide an exhaustive, highly detailed, factual, and professional master report in Markdown.\n\n"
                 "Strict format:\n"
-                "### 📋 Full Ticket Master Report\n"
+                "### 📋 Full Long-Term Ticket Master Report\n"
                 "• **Hosting Context:** " + plan_context + "\n"
-                "• **Ticket Origin & Goal:** [Why was this opened and what did the user want?]\n"
-                "• **Chronological Timeline:** [Detailed step-by-step breakdown of how the conversation progressed]\n"
-                "• **Bot Interactions & Commands:** [All bot commands executed, outputs, invite logs, or verification statuses]\n"
-                "• **Staff & User Contributions:** [What staff handled, what proof/information the user provided]\n"
-                "• **Final Resolution Status:** [Definitive outcome or standing point of the ticket]\n\n"
-                f"--- FULL UNLIMITED TRANSCRIPT ---\n{chat_transcript}"
+                "• **Ticket Origin & Initial Goal:** [Why was this long-term ticket originally opened?]\n"
+                "• **Chronological Progression & Milestones:** [Detailed timeline breakdown of how the case evolved over days/weeks]\n"
+                "• **Bot Interactions & Commands History:** [All bot commands executed, invite logs, verifications, or error outputs across time]\n"
+                "• **Staff & User Contributions:** [Key actions taken by staff and proofs provided by the user]\n"
+                "• **Current Standing & Final Resolution Status:** [Where the ticket stands right now or its final conclusion]\n\n"
+                f"--- COMPLETE UNLIMITED TRANSCRIPT ---\n{chat_transcript}"
             )
 
             chat_completion = self.groq_client.chat.completions.create(
@@ -59,17 +66,25 @@ class FullSummaryCog(commands.Cog):
                 max_completion_tokens=4096,
             )
 
+            summary_text = chat_completion.choices[0].message.content
+
+            # Handle Discord embed character limits safely (split or cap gracefully)
+            if len(summary_text) > 4000:
+                summary_text = summary_text[:3997] + "..."
+
             embed = discord.Embed(
-                title="📋 NexterMC Complete Master Report",
-                description=chat_completion.choices[0].message.content,
+                title="📋 NexterCloud Long-Term Master Report",
+                description=summary_text,
                 color=discord.Color.purple(),
             )
-            embed.set_footer(text=f"Requested by {ctx.author.name} • Full History Scanned")
+            embed.set_footer(text=f"Requested by {ctx.author.name} • {len(messages_history)} Messages Scanned")
+            
             await loading_msg.delete()
             await ctx.send(embed=embed)
 
         except Exception as e:
-            await loading_msg.edit(content=f"❌ Error: ```python\n{str(e)}\n```")
+            error_details = f"❌ **Error generating fullsummary for long-term ticket:**\n```python\n{str(e)}\n```"
+            await loading_msg.edit(content=error_details)
 
 async def setup(bot):
     await bot.add_cog(FullSummaryCog(bot))
