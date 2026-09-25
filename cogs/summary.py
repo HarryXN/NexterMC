@@ -53,18 +53,20 @@ class SummaryCog(commands.Cog):
             else:
                 rules_transcript = "⚠️ Event rules channel ID not found or bot cannot see it."
 
-            # 3. Construct a clean, professional prompt enforcing strict markdown and a final conclusion
+            # 3. Construct a high-intelligence audit prompt with precise invite metrics & solutions
             prompt = (
-                "You are an expert support supervisor and server auditor. "
-                "Review the official Event Rules and the ongoing Support/Reward Ticket Transcript. "
-                "Provide a clean, professional executive summary using standard Markdown bullet points. "
-                "CRITICAL: Do NOT use HTML tags like <br> and do NOT use markdown tables. Keep sentences concise and easy to scan at a glance.\n\n"
+                "You are an elite, highly intelligent Discord server auditor and support supervisor. "
+                "Review the official Event Rules and the ongoing Support/Reward Ticket Transcript with rigorous logic. "
+                "Provide an extremely clear, highly structured summary using Markdown bullets. No tables, no HTML tags.\n\n"
                 "Use this exact structure:\n"
-                "• **Core Issue:** [1 sentence summary of what the user needs]\n"
-                "• **Actions Taken:** [Short bullet points of what staff/user did]\n"
-                "• **Status:** [Resolved / Pending requirements]\n"
-                "• **Rule & Invite Audit:** [Brief verification against event rules]\n"
-                "• **Final Conclusion:** [A crisp, 1-2 sentence final verdict and clear next step for staff]\n\n"
+                "• **Core Problem:** [Crystal clear, 1-2 sentence statement of what the user wants or is experiencing]\n"
+                "• **Invite & Reward Audit:**\n"
+                "  - **Claimed Invites:** [Number claimed by user]\n"
+                "  - **Valid Verified Invites:** [Final calculated count after applying rules]\n"
+                "  - **Deductions & Rule Violations:** [Explicit breakdown of any penalties, missing bio/pfp, or missing proofs]\n"
+                "  - **Requirement Status:** [Met / Not Met, and how many are still needed]\n"
+                "• **Possible Solutions:** [Actionable, practical solutions for staff and the user to resolve this ticket quickly]\n"
+                "• **Final Staff Verdict:** [A sharp, definitive 1-sentence conclusion telling staff exactly what action to take next]\n\n"
                 f"--- OFFICIAL EVENT RULES ---\n{rules_transcript}\n\n"
                 f"--- TICKET TRANSCRIPT ---\n{chat_transcript}"
             )
@@ -88,7 +90,7 @@ class SummaryCog(commands.Cog):
             summary_text = chat_completion.choices[0].message.content
 
             embed = discord.Embed(
-                title="🤖 AI Ticket Summary & Audit",
+                title="🤖 AI Ticket Summary & Intelligent Audit",
                 description=summary_text,
                 color=discord.Color.blue(),
             )
