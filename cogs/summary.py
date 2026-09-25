@@ -13,31 +13,40 @@ class SummaryCog(commands.Cog):
 
     @commands.command(
         name="summarize",
-        help="Provides a clean general summary of the support ticket issues and troubleshooting steps.",
+        help="Provides a clean, concise, and professional general summary of the support ticket.",
     )
     async def summarize(self, ctx):
-        loading_msg = await ctx.reply("⏳ Generating general ticket summary...", mention_author=False)
+        loading_msg = await ctx.reply("⏳ Synthesizing general ticket overview...", mention_author=False)
 
         try:
             messages_history = []
             async for message in ctx.channel.history(limit=100, oldest_first=True):
-                if not message.author.bot:
-                    messages_history.append(f"{message.author.name}: {message.content}")
+                content = f"{message.author.name}: {message.content}"
+                for embed in message.embeds:
+                    if embed.title:
+                        content += f" [Embed Title: {embed.title}]"
+                    if embed.description:
+                        content += f" [Embed Desc: {embed.description}]"
+                    for field in embed.fields:
+                        content += f" [{field.name}: {field.value}]"
+                messages_history.append(content)
 
             if not messages_history:
-                await loading_msg.edit(content="❌ No user messages found to summarize.")
+                await loading_msg.edit(content="❌ No message history found to summarize.")
                 return
 
             chat_transcript = "\n".join(messages_history)
 
             prompt = (
-                "You are an expert support supervisor. Review the following support ticket transcript "
-                "and provide a clear, concise executive summary using clean Markdown bullet points. No tables, no HTML.\n\n"
-                "Use this exact structure:\n"
-                "• **Core Problem:** [What is the user's main issue?]\n"
-                "• **Troubleshooting Steps:** [What has been tested or done so far?]\n"
-                "• **Current Status:** [Pending / Resolved / Escalated]\n"
-                "• **Next Steps & Solutions:** [Actionable steps for staff or user to resolve it]\n\n"
+                "You are an expert senior support supervisor for NexterCloud Hosting. Review the ticket transcript "
+                "and generate a highly professional, clear, concise, and eye-catching general summary using Markdown. "
+                "Avoid overly technical jargon; use easy-to-understand, crisp words.\n\n"
+                "Strictly follow this layout:\n"
+                "### 📌 General Ticket Overview\n"
+                "• **Core Issue:** [Brief description of what prompted the ticket]\n"
+                "• **Actions Taken:** [What staff and user did so far]\n"
+                "• **Current Status:** [Active / Pending / Resolved]\n"
+                "• **Recommended Next Step:** [Immediate action needed]\n\n"
                 f"--- TICKET TRANSCRIPT ---\n{chat_transcript}"
             )
 
@@ -51,11 +60,11 @@ class SummaryCog(commands.Cog):
             summary_text = chat_completion.choices[0].message.content
 
             embed = discord.Embed(
-                title="🤖 General Ticket Summary",
+                title="✨ General Ticket Summary",
                 description=summary_text,
                 color=discord.Color.blue(),
             )
-            embed.set_footer(text=f"Requested by {ctx.author.name}")
+            embed.set_footer(text=f"Requested by {ctx.author.name} • NexterMC Support")
             
             await loading_msg.delete()
             await ctx.send(embed=embed)
