@@ -13,7 +13,6 @@ class SummaryCog(commands.Cog):
         if not groq_api_key:
             print("WARNING: GROQ_API_KEY is missing from environment variables!")
         self.groq_client = Groq(api_key=groq_api_key)
-        # Using the verified working model from your Groq playground
         self.model_id = "openai/gpt-oss-120b"
 
     @commands.command(
@@ -54,28 +53,29 @@ class SummaryCog(commands.Cog):
             else:
                 rules_transcript = "⚠️ Event rules channel ID not found or bot cannot see it."
 
-            # 3. Construct the comprehensive AI prompt
+            # 3. Construct a clean, professional prompt enforcing strict markdown and a final conclusion
             prompt = (
                 "You are an expert support supervisor and server auditor. "
-                "Review the following official Event Rules and the ongoing Support/Reward Ticket Transcript. "
-                "Provide a structured executive summary covering:\n"
-                "1. **User Issue / Core Problem**\n"
-                "2. **Troubleshooting Steps Taken**\n"
-                "3. **Resolution Status (Resolved/Pending)**\n"
-                "4. **Possible Easy Solutions / Next Steps**\n"
-                "5. **Invite & Rule Evaluation (ONLY IF THIS IS AN INVITE/REWARD TICKET):** "
-                "Analyze the event rules provided below against the user's claims in the ticket. State clearly whether they qualify, if any invites should be deducted/verified, and why.\n\n"
+                "Review the official Event Rules and the ongoing Support/Reward Ticket Transcript. "
+                "Provide a clean, professional executive summary using standard Markdown bullet points. "
+                "CRITICAL: Do NOT use HTML tags like <br> and do NOT use markdown tables. Keep sentences concise and easy to scan at a glance.\n\n"
+                "Use this exact structure:\n"
+                "• **Core Issue:** [1 sentence summary of what the user needs]\n"
+                "• **Actions Taken:** [Short bullet points of what staff/user did]\n"
+                "• **Status:** [Resolved / Pending requirements]\n"
+                "• **Rule & Invite Audit:** [Brief verification against event rules]\n"
+                "• **Final Conclusion:** [A crisp, 1-2 sentence final verdict and clear next step for staff]\n\n"
                 f"--- OFFICIAL EVENT RULES ---\n{rules_transcript}\n\n"
                 f"--- TICKET TRANSCRIPT ---\n{chat_transcript}"
             )
 
-            # 4. Call Groq API matching your playground structure
+            # 4. Call Groq API
             chat_completion = self.groq_client.chat.completions.create(
                 model=self.model_id,
                 messages=[
                     {
                         "role": "user",
-                        "content": f"You are a precise server management assistant. Evaluate rule compliance accurately.\n\n{prompt}"
+                        "content": prompt
                     }
                 ],
                 temperature=0.2,
@@ -88,7 +88,7 @@ class SummaryCog(commands.Cog):
             summary_text = chat_completion.choices[0].message.content
 
             embed = discord.Embed(
-                title="🤖 AI Ticket Summary & Invite Audit",
+                title="🤖 AI Ticket Summary & Audit",
                 description=summary_text,
                 color=discord.Color.blue(),
             )
