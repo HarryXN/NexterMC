@@ -4,7 +4,6 @@ import discord
 from discord.ext import commands
 from groq import Groq
 
-# Your specific event rules channel ID
 EVENT_RULES_CHANNEL_ID = 1419933431399452753
 
 class SummaryCog(commands.Cog):
@@ -14,13 +13,15 @@ class SummaryCog(commands.Cog):
         if not groq_api_key:
             print("WARNING: GROQ_API_KEY is missing from environment variables!")
         self.groq_client = Groq(api_key=groq_api_key)
-        self.model_id = "llama-3.3-70b-versatile"
+        # Using the correct active production model ID
+        self.model_id = "llama-3.1-8b-instant"
 
     @commands.command(
         name="summarize",
         help="Summarizes ticket transcripts, checks event rules, and evaluates invite requirements.",
     )
     async def summarize(self, ctx):
+        # Sends a targeted reply while fetching channel data
         loading_msg = await ctx.reply("⏳ Fetching channel data and analyzing rules...", mention_author=False)
 
         try:
@@ -69,7 +70,7 @@ class SummaryCog(commands.Cog):
                 f"--- TICKET TRANSCRIPT ---\n{chat_transcript}"
             )
 
-            # 4. Call Groq API with bug-resistant error boundaries
+            # 4. Call Groq API
             chat_completion = self.groq_client.chat.completions.create(
                 model=self.model_id,
                 messages=[
@@ -97,11 +98,11 @@ class SummaryCog(commands.Cog):
             )
             embed.set_footer(text=f"Requested by {ctx.author.name} | Audited against Rules Channel ID: {EVENT_RULES_CHANNEL_ID}")
             
+            # Delete the loading message and send the final public summary embed
             await loading_msg.delete()
             await ctx.send(embed=embed)
 
         except Exception as e:
-            # Bug proof reporting mechanism
             error_msg = f"❌ **Bug / Error Encountered in Summarize Command:**\n```python\n{str(e)}\n```"
             print(f"Summarize Error: {e}")
             try:
