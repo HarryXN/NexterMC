@@ -13,15 +13,14 @@ class SummaryCog(commands.Cog):
         if not groq_api_key:
             print("WARNING: GROQ_API_KEY is missing from environment variables!")
         self.groq_client = Groq(api_key=groq_api_key)
-        # Using the correct active production model ID
-        self.model_id = "llama-3.1-8b-instant"
+        # Using the verified working model from your Groq playground
+        self.model_id = "openai/gpt-oss-120b"
 
     @commands.command(
         name="summarize",
         help="Summarizes ticket transcripts, checks event rules, and evaluates invite requirements.",
     )
     async def summarize(self, ctx):
-        # Sends a targeted reply while fetching channel data
         loading_msg = await ctx.reply("⏳ Fetching channel data and analyzing rules...", mention_author=False)
 
         try:
@@ -70,20 +69,17 @@ class SummaryCog(commands.Cog):
                 f"--- TICKET TRANSCRIPT ---\n{chat_transcript}"
             )
 
-            # 4. Call Groq API
+            # 4. Call Groq API matching your playground structure
             chat_completion = self.groq_client.chat.completions.create(
                 model=self.model_id,
                 messages=[
                     {
-                        "role": "system",
-                        "content": "You are a precise server management assistant. Evaluate rule compliance accurately and flag discrepancies."
-                    },
-                    {
                         "role": "user",
-                        "content": prompt
+                        "content": f"You are a precise server management assistant. Evaluate rule compliance accurately.\n\n{prompt}"
                     }
                 ],
                 temperature=0.2,
+                max_completion_tokens=2048,
             )
 
             if not chat_completion.choices or not chat_completion.choices[0].message.content:
@@ -98,7 +94,6 @@ class SummaryCog(commands.Cog):
             )
             embed.set_footer(text=f"Requested by {ctx.author.name} | Audited against Rules Channel ID: {EVENT_RULES_CHANNEL_ID}")
             
-            # Delete the loading message and send the final public summary embed
             await loading_msg.delete()
             await ctx.send(embed=embed)
 
