@@ -13,65 +13,61 @@ class SummaryCog(commands.Cog):
 
     @commands.command(
         name="summarize",
-        help="Provides a clean, concise, and professional general summary of the support ticket.",
+        help="Provides a short, highly accurate general ticket summary.",
     )
     async def summarize(self, ctx):
-        loading_msg = await ctx.reply("⏳ Synthesizing general ticket overview...", mention_author=False)
+        loading_msg = await ctx.reply("⏳ Generating precise ticket overview...", mention_author=False)
 
         try:
             messages_history = []
             async for message in ctx.channel.history(limit=100, oldest_first=True):
                 content = f"{message.author.name}: {message.content}"
                 for embed in message.embeds:
-                    if embed.title:
-                        content += f" [Embed Title: {embed.title}]"
-                    if embed.description:
-                        content += f" [Embed Desc: {embed.description}]"
-                    for field in embed.fields:
-                        content += f" [{field.name}: {field.value}]"
+                    if embed.title: content += f" [Embed: {embed.title}]"
+                    if embed.description: content += f" [Desc: {embed.description}]"
+                    for field in embed.fields: content += f" [{field.name}: {field.value}]"
                 messages_history.append(content)
 
             if not messages_history:
-                await loading_msg.edit(content="❌ No message history found to summarize.")
+                await loading_msg.edit(content="❌ No message history found.")
                 return
 
             chat_transcript = "\n".join(messages_history)
+            category_name = ctx.channel.category.name if ctx.channel.category else "Uncategorized"
+            category_id = ctx.channel.category_id if ctx.channel.category else 0
+
+            context_type = "Free Hosting (Invite-based)" if str(category_id) == "1505564682482618368" else ("Paid Hosting Plan" if str(category_id) == "1456919500602474651" else "General Support")
 
             prompt = (
-                "You are an expert senior support supervisor for NexterCloud Hosting. Review the ticket transcript "
-                "and generate a highly professional, clear, concise, and eye-catching general summary using Markdown. "
-                "Avoid overly technical jargon; use easy-to-understand, crisp words.\n\n"
-                "Strictly follow this layout:\n"
-                "### 📌 General Ticket Overview\n"
-                "• **Core Issue:** [Brief description of what prompted the ticket]\n"
-                "• **Actions Taken:** [What staff and user did so far]\n"
-                "• **Current Status:** [Active / Pending / Resolved]\n"
-                "• **Recommended Next Step:** [Immediate action needed]\n\n"
-                f"--- TICKET TRANSCRIPT ---\n{chat_transcript}"
+                f"You are an expert support supervisor for NexterCloud hosting ({context_type}). "
+                "Analyze the ticket transcript and write a SHORT, crisp, and laser-accurate summary using Markdown.\n\n"
+                "Strict format:\n"
+                "### 📌 Ticket Overview\n"
+                "• **Plan Type:** " + context_type + "\n"
+                "• **Core Issue:** [1 sentence on the main problem]\n"
+                "• **Actions Performed:** [Key troubleshooting or steps taken]\n"
+                "• **Status:** [Active / Resolved / Awaiting User Response]\n\n"
+                f"--- TRANSCRIPT ---\n{chat_transcript}"
             )
 
             chat_completion = self.groq_client.chat.completions.create(
                 model=self.model_id,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.2,
-                max_completion_tokens=2048,
+                temperature=0.1,
+                max_completion_tokens=1024,
             )
-
-            summary_text = chat_completion.choices[0].message.content
 
             embed = discord.Embed(
                 title="✨ General Ticket Summary",
-                description=summary_text,
+                description=chat_completion.choices[0].message.content,
                 color=discord.Color.blue(),
             )
-            embed.set_footer(text=f"Requested by {ctx.author.name} • NexterMC Support")
-            
+            embed.set_footer(text=f"Requested by {ctx.author.name} • NexterMC Hosting")
             await loading_msg.delete()
             await ctx.send(embed=embed)
 
         except Exception as e:
-            error_msg = f"❌ **Error in summarize command:**\n```python\n{str(e)}\n```"
-            await loading_msg.edit(content=error_msg)
+            await loading_msg.edit(content=f"❌ Error: ```python\n{str(e)}\n```")
 
 async def setup(bot):
     await bot.add_cog(SummaryCog(bot))

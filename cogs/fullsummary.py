@@ -13,57 +13,63 @@ class FullSummaryCog(commands.Cog):
 
     @commands.command(
         name="fullsummary",
-        help="Provides a comprehensive master summary of the entire ticket history and conversation flow.",
+        help="Compiles a comprehensive, unlimited-history master report of the entire ticket.",
     )
     async def fullsummary(self, ctx):
-        loading_msg = await ctx.reply("⏳ Compiling comprehensive ticket master report...", mention_author=False)
+        loading_msg = await ctx.reply("⏳ Pulling unlimited channel history and compiling full master report...", mention_author=False)
 
         try:
             messages_history = []
-            async for message in ctx.channel.history(limit=150, oldest_first=True):
-                if not message.author.bot:
-                    messages_history.append(f"{message.author.name}: {message.content}")
+            # limit=None fetches the entire channel history from the beginning
+            async for message in ctx.channel.history(limit=None, oldest_first=True):
+                content = f"[{message.created_at.strftime('%Y-%m-%d %H:%M')}] {message.author.name}: {message.content}"
+                for embed in message.embeds:
+                    if embed.title: content += f" | Title: {embed.title}"
+                    if embed.description: content += f" | Desc: {embed.description}"
+                    for field in embed.fields: content += f" | {field.name}: {field.value}"
+                messages_history.append(content)
 
             if not messages_history:
-                await loading_msg.edit(content="❌ No messages found to summarize.")
+                await loading_msg.edit(content="❌ No message history found.")
                 return
 
             chat_transcript = "\n".join(messages_history)
+            category_id = ctx.channel.category_id if ctx.channel.category else 0
+            plan_context = "Free Plan (Invite-based)" if str(category_id) == "1505564682482618368" else ("Paid Plan" if str(category_id) == "1456919500602474651" else "General")
 
             prompt = (
-                "You are an expert senior server administrator. Review the entire ticket conversation transcript "
-                "and generate a comprehensive master summary using clean Markdown bullet points. No tables, no HTML.\n\n"
-                "Use this exact structure:\n"
-                "• **Overview / Objective:** [What started this ticket and what is the user trying to achieve?]\n"
-                "• **Conversation Timeline:** [Key milestones, questions asked, and staff responses in chronological order]\n"
-                "• **Technical / Reward Status:** [Current standing of the request]\n"
-                "• **Outstanding Tasks:** [What is left to complete before closing the ticket?]\n"
-                "• **Final Conclusion:** [Crisp final verdict on the ticket outcome]\n\n"
-                f"--- FULL TICKET TRANSCRIPT ---\n{chat_transcript}"
+                f"You are an elite senior auditor for NexterCloud hosting ({plan_context}). "
+                "Analyze the ENTIRE ticket history from the very first message to the last. Do not miss any details, bot commands, or user statements. "
+                "Provide an exhaustive, factual, eye-catching, professional master report in Markdown. Zero hallucinations.\n\n"
+                "Strict format:\n"
+                "### 📋 Full Ticket Master Report\n"
+                "• **Hosting Context:** " + plan_context + "\n"
+                "• **Ticket Origin & Goal:** [Why was this opened and what did the user want?]\n"
+                "• **Chronological Timeline:** [Detailed step-by-step breakdown of how the conversation progressed]\n"
+                "• **Bot Interactions & Commands:** [All bot commands executed, outputs, invite logs, or verification statuses]\n"
+                "• **Staff & User Contributions:** [What staff handled, what proof/information the user provided]\n"
+                "• **Final Resolution Status:** [Definitive outcome or standing point of the ticket]\n\n"
+                f"--- FULL UNLIMITED TRANSCRIPT ---\n{chat_transcript}"
             )
 
             chat_completion = self.groq_client.chat.completions.create(
                 model=self.model_id,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.2,
-                max_completion_tokens=2048,
+                temperature=0.1,
+                max_completion_tokens=4096,
             )
-
-            summary_text = chat_completion.choices[0].message.content
 
             embed = discord.Embed(
-                title="📋 Comprehensive Ticket Master Report",
-                description=summary_text,
+                title="📋 NexterMC Complete Master Report",
+                description=chat_completion.choices[0].message.content,
                 color=discord.Color.purple(),
             )
-            embed.set_footer(text=f"Requested by {ctx.author.name}")
-            
+            embed.set_footer(text=f"Requested by {ctx.author.name} • Full History Scanned")
             await loading_msg.delete()
             await ctx.send(embed=embed)
 
         except Exception as e:
-            error_msg = f"❌ **Error in fullsummary command:**\n```python\n{str(e)}\n```"
-            await loading_msg.edit(content=error_msg)
+            await loading_msg.edit(content=f"❌ Error: ```python\n{str(e)}\n```")
 
 async def setup(bot):
     await bot.add_cog(FullSummaryCog(bot))
