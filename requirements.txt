@@ -1,7 +1,0 @@
-discord.py
-python-dotenv
-mcstatus
-aiohttp
-psutil
-google-genai
-groq
