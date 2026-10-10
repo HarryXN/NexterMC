@@ -1,0 +1,14 @@
+NexterMC Bot — Source Package
+
+Package contents: current bot source, command cogs, shared utilities, operations files, dependency list, and deployment examples.
+
+Before deployment:
+1. Back up the existing VPS project.
+2. Upload/replace the source files and folders from this archive.
+3. Keep your existing .env file private and unchanged. This archive intentionally does not include it. Use .env.example only as a key checklist; do not upload it as .env without filling in the VPS values.
+4. Keep the existing data/ directory and nextermc.db. They contain runtime state and are intentionally not included.
+5. Do not upload the local venv, backups, staging folders, or old update archives from the development workspace.
+6. Install any newly required packages from requirements.txt and restart the bot service using your normal deployment process.
+7. For the banword filter, give the bot Manage Messages. For repeat restricted-target pings to trigger a 1-hour timeout, it also needs Moderate Members and a role above the message author. Add the target's Discord user ID (recommended) or exact username/display name with `,banword add`; role mentions can be configured by role ID or exact role name. The first matching ping is deleted with a warning; a repeat by that user within 24 hours is deleted and timed out for 1 hour. Members with sender roles `1525152379710734389`, `1499066080390283384`, or `1469259811186278597` are exempt from the restricted-target ping rule (ordinary banned words still apply). `,banword disable` disables both text and restricted-mention filtering.
+
+DiscordSRV is a separate Minecraft plugin and is not included in this bot source archive. Its ConfigVersion is managed by DiscordSRV. To silence its invalid account-link code response, edit InvalidCode in each server's plugins/DiscordSRV/messages.yml; do not replace the DiscordSRV config with the bot's .env.
