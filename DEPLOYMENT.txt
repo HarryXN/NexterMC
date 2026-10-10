@@ -1,0 +1,14 @@
+NexterMC Bot — Source Package
+
+Package contents: current bot source, command cogs, shared utilities, operations files, dependency list, and deployment examples.
+
+Before deployment:
+1. Back up the existing VPS project.
+2. Upload/replace the source files and folders from this archive.
+3. Keep your existing .env file private and unchanged. This archive intentionally does not include it. Use .env.example only as a key checklist; do not upload it as .env without filling in the VPS values.
+4. Keep the existing data/ directory and nextermc.db. They contain runtime state and are intentionally not included.
+5. Do not upload the local venv, backups, staging folders, or old update archives from the development workspace.
+6. Install any newly required packages from requirements.txt and restart the bot service using your normal deployment process.
+7. For the banword filter, give the bot Manage Messages. For repeat restricted-target pings to trigger a 1-hour timeout, it also needs Moderate Members and a role above the message author. The first matching ping is deleted with a warning; a repeat within 24 hours is deleted and timed out for 1 hour. Filter warnings stay visible in the channel. Successful timeouts are logged in channel `1551741192830718044`; the bot needs View Channel, Send Messages, and Embed Links there. Sender roles `1525152379710734389` and `1499066080390283384`, plus user IDs `1006250810142883851`, `1307545812124827698`, and `1514798035379556501`, are exempt from the restricted-target ping rule (ordinary banned words still apply). Replying to a configured user does not trigger the restricted-ping rule, but ordinary banned words in the reply are still filtered. `,banword disable` disables both text and restricted-mention filtering.
+
+DiscordSRV is a separate Minecraft plugin and is not included in this bot source archive. Its ConfigVersion is managed by DiscordSRV. To silence its invalid account-link code response, edit InvalidCode in each server's plugins/DiscordSRV/messages.yml; do not replace the DiscordSRV config with the bot's .env.
