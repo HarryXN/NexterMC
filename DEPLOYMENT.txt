@@ -1,0 +1,11 @@
+NexterMC Bot — Full Source Package (r2)
+
+This archive contains a consistent full source tree. Upload/deploy the archive contents from the project root so cogs/ and utils/ stay together. In particular, utils/ai_client.py exports AIConfigError and AIResponseError, and interview scoring requests valid JSON output.
+
+Railway:
+- Preserve existing service Variables; do not replace them with .env.example.
+- Attach a persistent volume at /app/data and set NEXTERMC_DB_PATH=/app/data/nextermc.db.
+- Keep the existing database on that volume to retain bot state.
+- Start command: python main.py.
+
+Secrets, the local database, local virtual environment, backups, staging folders, and older update archives are intentionally excluded. DiscordSRV is a separate Minecraft plugin.
