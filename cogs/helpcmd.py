@@ -29,6 +29,8 @@ HELP_SECTIONS = {
         "body": (
             "`warn issue <user> [reason]` — Issue a tracked warning.\n"
             "`warn remove <id>` · `warn list [user]` — Manage warnings.\n"
+            "`banword add <word or phrase>` · `banword remove <term>` · `banword list` — Manage this server’s word filter.\n"
+            "`banword enable|disable` — Turn automatic deletion on or off. Requires Manage Messages.\n"
             "`ban <user> [reason]` · `unban <user>` — Manage server bans.\n"
             "`timeout <user> [minutes] [reason]` · `untimeout <user>`\n"
             "`kick <user> [reason]` — Remove a member from the server."

@@ -1,0 +1,225 @@
+"""Persistent per-server word and phrase filter."""
+from __future__ import annotations
+
+import logging
+import re
+
+import discord
+from discord.ext import commands
+
+from permissions import has_permissions_or_owner
+from utils import storage
+
+log = logging.getLogger("nextermc.banword")
+_FLAG_PREFIX = "banword_filter:"
+_MAX_TERM_LENGTH = 100
+
+
+def _clean_term(value: str) -> str:
+    return " ".join(value.strip().casefold().split())
+
+
+def _matches(content: str, term: str) -> bool:
+    normalized = " ".join(content.casefold().split())
+    pattern = re.compile(r"(?<!\w)" + re.escape(term) + r"(?!\w)", re.UNICODE)
+    return pattern.search(normalized) is not None
+
+
+class BanwordCog(commands.Cog):
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+        self._terms: dict[int, list[str]] = {}
+        self._enabled: dict[int, bool] = {}
+
+    async def _get_terms(self, guild_id: int) -> list[str]:
+        if guild_id not in self._terms:
+            self._terms[guild_id] = await storage.list_banned_words(guild_id)
+        return self._terms[guild_id]
+
+    async def _is_enabled(self, guild_id: int) -> bool:
+        if guild_id not in self._enabled:
+            self._enabled[guild_id] = await storage.get_feature_flag(
+                f"{_FLAG_PREFIX}{guild_id}", default=True
+            )
+        return self._enabled[guild_id]
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        if message.guild is None or message.author.bot or message.webhook_id:
+            return
+        # Keep the moderation controls usable even if an administrator's input
+        # contains the term they are trying to add or remove.
+        if message.content.casefold().lstrip().startswith(",banword "):
+            return
+        if not await self._is_enabled(message.guild.id):
+            return
+
+        terms = await self._get_terms(message.guild.id)
+        match = next((term for term in terms if _matches(message.content, term)), None)
+        if match is None:
+            return
+
+        try:
+            await message.delete()
+        except discord.NotFound:
+            return
+        except discord.Forbidden:
+            log.warning(
+                "Cannot remove a filtered message: missing Manage Messages in guild %s channel %s",
+                message.guild.id,
+                message.channel.id,
+            )
+            return
+        except discord.HTTPException:
+            log.exception("Failed to remove a filtered message in channel %s", message.channel.id)
+            return
+
+        warning = discord.Embed(
+            title="🛡️ Please keep the chat respectful",
+            description=f"{message.author.mention}, that message was removed by the server filter. Please don’t use that word or phrase again.",
+            color=discord.Color.orange(),
+        )
+        warning.set_footer(text="NexterMC · Automated word filter")
+        try:
+            warning_message = await message.channel.send(
+                embed=warning,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            await warning_message.delete(delay=8)
+        except discord.Forbidden:
+            log.warning("Cannot post word-filter warning in channel %s", message.channel.id)
+        except discord.HTTPException:
+            log.exception("Failed to post word-filter warning in channel %s", message.channel.id)
+
+    @commands.hybrid_group(
+        name="banword",
+        invoke_without_command=True,
+        description="Manage this server's word and phrase filter.",
+    )
+    @has_permissions_or_owner(manage_messages=True)
+    async def banword(self, ctx: commands.Context):
+        if ctx.guild is None:
+            await ctx.send("This command can only be used in a server.", ephemeral=ctx.interaction is not None)
+            return
+        terms = await self._get_terms(ctx.guild.id)
+        enabled = await self._is_enabled(ctx.guild.id)
+        status = "🟢 Enabled" if enabled else "⚫ Disabled"
+        description = (
+            f"**Filter:** {status}\n**Terms:** {len(terms)}\n\n"
+            "Use `,banword add <word or phrase>`, `remove <word or phrase>`, `list`, "
+            "`enable`, or `disable`."
+        )
+        await ctx.send(
+            embed=discord.Embed(
+                title="🛡️ NexterMC · Word Filter",
+                description=description,
+                color=discord.Color.green() if enabled else discord.Color.dark_grey(),
+            ),
+            ephemeral=ctx.interaction is not None,
+        )
+
+    @banword.command(name="add", description="Add a word, phrase, user ID, or mention to the filter.")
+    @has_permissions_or_owner(manage_messages=True)
+    async def add_term(self, ctx: commands.Context, *, term: str):
+        if ctx.guild is None:
+            await ctx.send("Use this command in a server.", ephemeral=ctx.interaction is not None)
+            return
+        term = _clean_term(term)
+        if not term or len(term) > _MAX_TERM_LENGTH:
+            await ctx.send(f"Enter a word or phrase from 1 to {_MAX_TERM_LENGTH} characters.", ephemeral=ctx.interaction is not None)
+            return
+        added = await storage.add_banned_word(ctx.guild.id, term, ctx.author.id)
+        self._terms.setdefault(ctx.guild.id, await storage.list_banned_words(ctx.guild.id))
+        if added and term not in self._terms[ctx.guild.id]:
+            self._terms[ctx.guild.id].append(term)
+        if added:
+            embed = discord.Embed(
+                title="✅ Filter term added",
+                description=f"**Term:** `{discord.utils.escape_markdown(term)}`\nNew messages containing this whole word or phrase will be removed.",
+                color=discord.Color.green(),
+            )
+        else:
+            embed = discord.Embed(
+                title="ℹ️ Already in the filter",
+                description=f"`{discord.utils.escape_markdown(term)}` is already blocked in this server.",
+                color=discord.Color.blurple(),
+            )
+        embed.set_footer(text="Only new messages are checked")
+        await ctx.send(embed=embed)
+
+    @banword.command(name="remove", description="Remove a word or phrase from the filter.")
+    @has_permissions_or_owner(manage_messages=True)
+    async def remove_term(self, ctx: commands.Context, *, term: str):
+        if ctx.guild is None:
+            await ctx.send("Use this command in a server.", ephemeral=ctx.interaction is not None)
+            return
+        term = _clean_term(term)
+        removed = await storage.remove_banned_word(ctx.guild.id, term)
+        if ctx.guild.id in self._terms:
+            self._terms[ctx.guild.id] = [item for item in self._terms[ctx.guild.id] if item != term]
+        await ctx.send(
+            embed=discord.Embed(
+                title="✅ Filter term removed" if removed else "❓ Term not found",
+                description=(
+                    f"`{discord.utils.escape_markdown(term)}` is no longer filtered."
+                    if removed else f"`{discord.utils.escape_markdown(term)}` was not in this server’s filter."
+                ),
+                color=discord.Color.green() if removed else discord.Color.orange(),
+            )
+        )
+
+    @banword.command(name="list", description="Show this server's filtered words and phrases.")
+    @has_permissions_or_owner(manage_messages=True)
+    async def list_terms(self, ctx: commands.Context):
+        if ctx.guild is None:
+            await ctx.send("Use this command in a server.", ephemeral=ctx.interaction is not None)
+            return
+        terms = await storage.list_banned_words(ctx.guild.id)
+        self._terms[ctx.guild.id] = terms
+        if not terms:
+            description = "No words or phrases are configured yet."
+        else:
+            description = "\n".join(f"• `{discord.utils.escape_markdown(term)}`" for term in terms[:40])
+            if len(terms) > 40:
+                description += f"\n…and {len(terms) - 40} more."
+        enabled = await self._is_enabled(ctx.guild.id)
+        embed = discord.Embed(
+            title="📋 NexterMC · Filter Terms",
+            description=description,
+            color=discord.Color.green() if enabled else discord.Color.dark_grey(),
+        )
+        embed.set_footer(text=f"Filter {'enabled' if enabled else 'disabled'} · {len(terms)} term(s)")
+        await ctx.send(embed=embed, ephemeral=ctx.interaction is not None)
+
+    async def _set_enabled(self, ctx: commands.Context, enabled: bool):
+        if ctx.guild is None:
+            await ctx.send("Use this command in a server.", ephemeral=ctx.interaction is not None)
+            return
+        await storage.set_feature_flag(f"{_FLAG_PREFIX}{ctx.guild.id}", enabled)
+        self._enabled[ctx.guild.id] = enabled
+        if enabled:
+            await ctx.send(embed=discord.Embed(
+                title="🟢 Word filter enabled",
+                description="New messages will be checked against this server’s filter terms.",
+                color=discord.Color.green(),
+            ))
+        else:
+            await ctx.send(embed=discord.Embed(
+                title="⚫ Word filter disabled",
+                description="Messages will no longer be removed by the word filter. Your saved terms are kept.",
+                color=discord.Color.dark_grey(),
+            ))
+
+    @banword.command(name="enable", description="Enable this server's word filter.")
+    @has_permissions_or_owner(manage_messages=True)
+    async def enable_filter(self, ctx: commands.Context):
+        await self._set_enabled(ctx, True)
+
+    @banword.command(name="disable", description="Disable this server's word filter.")
+    @has_permissions_or_owner(manage_messages=True)
+    async def disable_filter(self, ctx: commands.Context):
+        await self._set_enabled(ctx, False)
+
+
+async def setup(bot: commands.Bot):
+    await bot.add_cog(BanwordCog(bot))
